@@ -32,7 +32,7 @@ describe("sol-dev", () => {
 			program.programId
 		);
 
-		await program.rpc.initMember({
+		/* await program.rpc.initMember({
 			accounts: {
 				dao: daoKey.publicKey,
 				member: memberPDA,
@@ -40,35 +40,11 @@ describe("sol-dev", () => {
 				payer: provider.wallet.publicKey,
 				systemProgram: SystemProgram.programId,
 			},
-		});
+		}); */
 
 		const daoName = await program.account.dao.fetch(daoKey.publicKey);
 		console.log(daoName);
 		/* 		const memberDets = await program.account.member.fetch(memberPDA);
 		console.log(memberDets); */
-	});
-	it("Can't init member not manager", async () => {
-		try {
-			const [memberPDA2, _bump2] = await anchor.web3.PublicKey.findProgramAddress(
-				[Buffer.from("member"), account2.publicKey.toBuffer(), daoKey.publicKey.toBuffer()],
-				program.programId
-			);
-			await program.rpc.initMember({
-				accounts: {
-					dao: daoKey.publicKey,
-					member: memberPDA2,
-					creator: account2.publicKey,
-					payer: account2.publicKey,
-					systemProgram: SystemProgram.programId,
-				},
-				signers: [account2],
-			});
-			assert.ok(false, "Should have thrown");
-		} catch (e) {
-			assert.equal(
-				e.toString(),
-				"Error: failed to send transaction: Transaction simulation failed: Error processing Instruction 0: Program failed to complete"
-			);
-		}
 	});
 });

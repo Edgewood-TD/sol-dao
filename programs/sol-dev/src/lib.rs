@@ -1,7 +1,13 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+use anchor_spl::token::TokenAccount;
 use metaplex_token_metadata::state::Metadata;
-use std::str::FromStr;
+
+pub mod custom_error;
+pub mod instructions;
+pub mod state;
+pub mod utils;
+pub use custom_error::error_code::ErrorCode::*;
+use instructions::*;
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
@@ -10,11 +16,22 @@ pub mod sol_dev {
     pub fn init_member(ctx: Context<InitMember>) -> Result<()> {
         let dao = &mut ctx.accounts.dao;
 
-        assert_eq!(
+        /* assert_eq!(
             dao.dao_manager,
             ctx.accounts.creator.key(),
             "Not DAO Manager"
-        );
+        ); */
+        verify_creator(
+            ctx.accounts.nft_mint.key(),
+            &ctx.accounts.nft_metadata_account,
+            dao.whitelisted_creators,
+        )?;
+
+        verify_holder_amount(
+            ctx.accounts.nft_account.clone(),
+            ctx.accounts.nft_mint.key(),
+            ctx.accounts.creator.key(),
+        )?;
         dao.member_count += 1;
         Ok(())
     }
@@ -24,6 +41,11 @@ pub mod sol_dev {
         dao.dao_manager = ctx.accounts.dao_manager.key();
         Ok(())
     }
+    pub fn config_dao(ctx: Context<ConfigDao>, whitelist_creator: Pubkey) -> Result<()> {
+        let dao = &mut ctx.accounts.dao;
+        dao.whitelisted_creators = whitelist_creator;
+        Ok(())
+    }
 }
 #[event]
 pub struct MyEvent {
@@ -31,102 +53,8 @@ pub struct MyEvent {
     #[index]
     pub label: String,
 }
-#[derive(Accounts)]
-pub struct InitMember<'info> {
-    #[account(mut)]
-    pub dao: Box<Account<'info, Dao>>,
-    #[account(init, seeds = [
-            b"member".as_ref(),
-            creator.key().as_ref(),
-						dao.key().as_ref()
-        ],
-        bump,
-        payer = creator,
-        space = 8 + std::mem::size_of::<Member>())]
-    pub member: Box<Account<'info, Member>>,
-    /*
-        //This account is to check the Member holds the NFT(s)
-    pub nft_account: Box<Account<'info, TokenAccount>>,
-        */
-    #[account(mut)]
-    pub creator: Signer<'info>,
 
-    //misc
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct InitDao<'info> {
-    #[account(init, payer = payer, space = 8 + std::mem::size_of::<Dao>())]
-    pub dao: Box<Account<'info, Dao>>,
-    pub dao_manager: Signer<'info>,
-    #[account(mut)]
-    pub payer: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct ConfigDao<'info> {
-    #[account(mut)]
-    pub dao: Box<Account<'info, Dao>>,
-    /// CHECK: Manager is responsible for checking this address is valid
-    pub nft_whitelist_creator: AccountInfo<'info>,
-}
-
-#[derive(Accounts)]
-pub struct CreateProposal<'info> {
-    #[account(mut)]
-    pub dao: Box<Account<'info, Dao>>,
-    #[account(init_if_needed, seeds = [
-            b"proposal".as_ref(),
-            proposer.key().as_ref(),
-						dao.key().as_ref()
-        ],
-        bump,
-        payer = proposer,
-        space = 8 + std::mem::size_of::<Proposal>())]
-    pub proposal: Box<Account<'info, Proposal>>,
-
-    #[account(mut)]
-    pub proposer: Signer<'info>,
-    //misc
-    pub system_program: Program<'info, System>,
-}
-#[account]
-pub struct Dao {
-    pub version: u16,
-    pub name: String,
-
-    pub dao_manager: Pubkey,
-
-    /// 1) creator from this list
-    pub whitelisted_creators: Pubkey,
-
-    /// 2) mint from this list
-    pub whitelisted_mints: Pubkey,
-
-    /// total vault count registered with this bank
-    pub member_count: u32,
-}
-
-#[account]
-pub struct Member {
-    /// sole control over gem whitelist, un/locking the vaults, and bank flags
-    /// can update itself to another Pubkey
-    pub dao: Pubkey,
-
-    pub data: String,
-
-    /// reserved for future updates, has to be /8
-    _reserved: [u8; 64],
-}
-#[account]
-pub struct Proposal {
-    pub proposer: Pubkey,
-    pub external_data: String,
-}
-
-fn assert_valid_metadata(
+/* fn assert_valid_metadata(
     gem_metadata: &AccountInfo,
     gem_mint: &Pubkey,
 ) -> core::result::Result<Metadata, ProgramError> {
@@ -138,10 +66,10 @@ fn assert_valid_metadata(
     ];
     let (metadata_addr, _bump) = Pubkey::find_program_address(seed, &metadata_program);
     Metadata::from_account_info(gem_metadata)
-}
+} */
 
 fn verify_holder_amount(
-    nft_token_account: TokenAccount,
+    nft_token_account: Account<'_, TokenAccount>,
     nft_mint: Pubkey,
     nft_holder: Pubkey,
 ) -> Result<()> {
@@ -152,11 +80,11 @@ fn verify_holder_amount(
         return Ok(());
     } else {
         msg!("invalid Hold Amount!");
-        return Err(error!(ErrorCode::InvalidHolder));
+        return Err(error!(InvalidHolder));
     }
 }
 
-fn verify_creator(
+pub fn verify_creator(
     nft_mint: Pubkey,
     metadata_account: &AccountInfo,
     valid_creator: Pubkey,
@@ -172,7 +100,7 @@ fn verify_creator(
     .0 != &metadata_account.key()
     {
         msg!("invalid metadata account!");
-        return Err(error!(ErrorCode::InvalidMetadata));
+        return Err(error!(InvalidMetadata));
     }
 
     let metadata_account = Metadata::from_account_info(&metadata_account)?;
@@ -188,18 +116,8 @@ fn verify_creator(
         )
         .as_str());
         msg!("invalid creator!");
-        return Err(error!(ErrorCode::InvalidCreator));
+        return Err(error!(InvalidCreator));
     }
 
     Ok(())
-}
-
-#[error_code]
-pub enum ErrorCode {
-    #[msg("Invalid Metadata")]
-    InvalidMetadata,
-    #[msg("NFT is not whitelisted")]
-    InvalidCreator,
-    #[msg("Account not holding provided NFT")]
-    InvalidHolder,
 }
