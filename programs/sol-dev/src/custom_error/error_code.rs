@@ -7,4 +7,6 @@ pub enum ErrorCode {
     InvalidCreator,
     #[msg("Account not holding provided NFT")]
     InvalidHolder,
+    #[msg("Proposal Not Found")]
+    ProposalNotFound,
 }

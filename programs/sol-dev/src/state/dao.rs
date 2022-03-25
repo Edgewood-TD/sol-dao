@@ -8,7 +8,7 @@ pub struct Dao {
 
     /// 1) creator from this list
     pub whitelisted_creators: Pubkey,
-
+    pub proposals: Vec<Pubkey>,
     /// 2) mint from this list
     pub whitelisted_mints: Pubkey,
 

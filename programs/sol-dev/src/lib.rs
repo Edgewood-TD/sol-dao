@@ -8,7 +8,7 @@ pub mod state;
 pub mod utils;
 pub use custom_error::error_code::ErrorCode::*;
 use instructions::*;
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("Daoa93bPj45FmxkeeKA7cginUou4MKSdYha8ApHehx4j");
 
 #[program]
 pub mod sol_dev {
@@ -16,11 +16,6 @@ pub mod sol_dev {
     pub fn init_member(ctx: Context<InitMember>) -> Result<()> {
         let dao = &mut ctx.accounts.dao;
 
-        /* assert_eq!(
-            dao.dao_manager,
-            ctx.accounts.creator.key(),
-            "Not DAO Manager"
-        ); */
         verify_creator(
             ctx.accounts.nft_mint.key(),
             &ctx.accounts.nft_metadata_account,
@@ -44,6 +39,36 @@ pub mod sol_dev {
     pub fn config_dao(ctx: Context<ConfigDao>, whitelist_creator: Pubkey) -> Result<()> {
         let dao = &mut ctx.accounts.dao;
         dao.whitelisted_creators = whitelist_creator;
+        Ok(())
+    }
+    pub fn create_proposal(ctx: Context<CreateProposal>, proposal_uri: String) -> Result<()> {
+        let dao = &mut ctx.accounts.dao;
+        verify_creator(
+            ctx.accounts.nft_mint.key(),
+            &ctx.accounts.nft_metadata_account,
+            dao.whitelisted_creators,
+        )?;
+
+        verify_holder_amount(
+            ctx.accounts.nft_account.clone(),
+            ctx.accounts.nft_mint.key(),
+            ctx.accounts.proposer.key(),
+        )?;
+        let proposal = &mut ctx.accounts.proposal;
+        dao.proposals.push(proposal.key());
+        proposal.proposer = ctx.accounts.proposer.key();
+        proposal.external_data = proposal_uri;
+        Ok(())
+    }
+    pub fn remove_proposal(ctx: Context<RemoveProposal>) -> Result<()> {
+        let dao = &mut ctx.accounts.dao;
+        let proposal = &mut ctx.accounts.proposal;
+        let remove_index = dao.proposals.iter().position(|&x| x == proposal.key());
+        if let Some(key) = remove_index {
+            dao.proposals.remove(key);
+        } else {
+            return Err(error!(ProposalNotFound));
+        }
         Ok(())
     }
 }

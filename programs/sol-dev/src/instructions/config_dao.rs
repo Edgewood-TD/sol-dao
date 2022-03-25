@@ -2,8 +2,9 @@ use crate::state::*;
 use anchor_lang::prelude::*;
 #[derive(Accounts)]
 pub struct ConfigDao<'info> {
-    #[account(mut)]
+    #[account(mut,has_one=dao_manager)]
     pub dao: Box<Account<'info, Dao>>,
-    /// CHECK: Manager is responsible for checking this address is valid
-    pub nft_whitelist_creator: AccountInfo<'info>,
+    #[account(mut)]
+    pub dao_manager: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
